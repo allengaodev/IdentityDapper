@@ -7,11 +7,12 @@ namespace IdentityDapper;
 public class CustomUserStore : IUserStore<IdentityUser>
 {
     private readonly IConfiguration _configuration;
+
     public CustomUserStore(IConfiguration configuration)
     {
         _configuration = configuration;
     }
-    
+
     public async Task<IdentityResult> CreateAsync(IdentityUser user, CancellationToken cancellationToken)
     {
         var connString = _configuration.GetSection("ConnectionStrings").GetValue<string>("DefaultConnection");
@@ -20,12 +21,14 @@ public class CustomUserStore : IUserStore<IdentityUser>
 
         int rows;
 
-        await using (var sqlConnection = conn) {
+        await using (var sqlConnection = conn)
+        {
             var command = $"INSERT INTO dbo.AspNetUsers " +
                           "VALUES (@Id, @UserName, @NormalizedUserName, @Email, @NormalizedEmail, @EmailConfirmed, @PasswordHash, @SecurityStamp, @ConcurrencyStamp, " +
                           "@PhoneNumber, @PhoneNumberConfirmed, @TwoFactorEnabled, @LockoutEnd, @LockoutEnabled, @AccessFailedCount);";
 
-            rows = await sqlConnection.ExecuteAsync(command, new {
+            rows = await sqlConnection.ExecuteAsync(command, new
+            {
                 user.Id,
                 user.UserName,
                 user.NormalizedUserName,
@@ -44,24 +47,27 @@ public class CustomUserStore : IUserStore<IdentityUser>
             });
         }
 
-        return rows == 1 ? IdentityResult.Success : IdentityResult.Failed(new IdentityError {
-            Code = nameof(CreateAsync),
-            Description = $"Insert User Error"
-        });
+        return rows == 1
+            ? IdentityResult.Success
+            : IdentityResult.Failed(new IdentityError
+            {
+                Code = nameof(CreateAsync),
+                Description = $"Insert User Error"
+            });
     }
-    
+
     public async Task<IdentityUser?> FindByNameAsync(string normalizedUserName, CancellationToken cancellationToken)
     {
         var connString = _configuration.GetSection("ConnectionStrings").GetValue<string>("DefaultConnection");
         await using var conn = new NpgsqlConnection(connString);
         await conn.OpenAsync();
-        
+
         await using (var sqlConnection = conn)
         {
             var command = "SELECT * " +
                           "FROM dbo.AspNetUsers " +
                           "WHERE NormalizedUserName = @NormalizedUserName;";
-            
+
             return await sqlConnection.QuerySingleOrDefaultAsync<IdentityUser>(command, new
             {
                 NormalizedUserName = normalizedUserName
@@ -73,15 +79,25 @@ public class CustomUserStore : IUserStore<IdentityUser>
     {
         GC.SuppressFinalize(this);
     }
-    
+
     public Task<string> GetUserIdAsync(IdentityUser user, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
+        }
+        return Task.FromResult(user.Id);
     }
 
     public Task<string?> GetUserNameAsync(IdentityUser user, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
+        }
+        return Task.FromResult(user.UserName);
     }
 
     public Task SetUserNameAsync(IdentityUser user, string? userName, CancellationToken cancellationToken)
@@ -94,9 +110,18 @@ public class CustomUserStore : IUserStore<IdentityUser>
         throw new NotImplementedException();
     }
 
-    public Task SetNormalizedUserNameAsync(IdentityUser user, string? normalizedName, CancellationToken cancellationToken)
+    public Task SetNormalizedUserNameAsync(
+        IdentityUser user,
+        string? normalizedName,
+        CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
+        }
+        user.NormalizedUserName = normalizedName;
+        return Task.CompletedTask;
     }
 
     public Task<IdentityResult> UpdateAsync(IdentityUser user, CancellationToken cancellationToken)
@@ -110,6 +135,16 @@ public class CustomUserStore : IUserStore<IdentityUser>
     }
 
     public Task<IdentityUser?> FindByIdAsync(string userId, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task SetSecurityStampAsync(IdentityUser user, string stamp, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task<string?> GetSecurityStampAsync(IdentityUser user, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }

@@ -8,26 +8,25 @@ namespace IdentityDapper.Controllers;
 public class AccountController : ControllerBase
 {
     private readonly IUserStore<IdentityUser> _userStore;
-    public AccountController(IUserStore<IdentityUser> userStore)
+    private readonly UserManager<IdentityUser> _userManager;
+    public AccountController(IUserStore<IdentityUser> userStore, UserManager<IdentityUser> userManager)
     {
         _userStore = userStore;
+        _userManager = userManager;
     }
     
     [HttpPost(Name = "CreateUser")]
     public async Task<IdentityResult> CreateUser()
     {
         var userName = "User1";
-        var identityUser = new IdentityUser(userName)
-        {
-            NormalizedUserName = userName.ToUpper()
-        };
-        return await _userStore.CreateAsync(identityUser,CancellationToken.None);
+        var identityUser = new IdentityUser(userName);
+        return await _userManager.CreateAsync(identityUser);
     }
     
     [HttpGet(Name = "GetUser")]
     public async Task<IdentityUser> GetUser()
     {
         var userName = "User1";
-        return await _userStore.FindByNameAsync(userName.ToUpper(),CancellationToken.None);
+        return await _userManager.FindByNameAsync(userName);
     }
 }
