@@ -4,7 +4,7 @@ using Npgsql;
 
 namespace IdentityDapper;
 
-public class CustomUserStore : IUserStore<IdentityUser>
+public class CustomUserStore : IUserStore<IdentityUser>, IUserPasswordStore<IdentityUser>
 {
     private readonly IConfiguration _configuration;
 
@@ -147,5 +147,40 @@ public class CustomUserStore : IUserStore<IdentityUser>
     public Task<string?> GetSecurityStampAsync(IdentityUser user, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
+    }
+
+    public Task SetPasswordHashAsync(IdentityUser user, string? passwordHash, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
+        }
+        if (passwordHash == null)
+        {
+            throw new ArgumentNullException(nameof(passwordHash), $"Parameter {nameof(passwordHash)} cannot be null.");
+        }
+        user.PasswordHash = passwordHash;
+        return Task.CompletedTask;
+    }
+
+    public Task<string?> GetPasswordHashAsync(IdentityUser user, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
+        }
+        return Task.FromResult(user.PasswordHash);
+    }
+
+    public Task<bool> HasPasswordAsync(IdentityUser user, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
+        }
+        return Task.FromResult(!string.IsNullOrEmpty(user.PasswordHash));
     }
 }
