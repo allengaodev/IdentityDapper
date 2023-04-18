@@ -1,10 +1,11 @@
+using System.Security.Claims;
 using Dapper;
 using Microsoft.AspNetCore.Identity;
 using Npgsql;
 
 namespace IdentityDapper;
 
-public class CustomUserStore : IUserStore<IdentityUser>, IUserPasswordStore<IdentityUser>
+public class CustomUserStore : IUserStore<IdentityUser>, IUserPasswordStore<IdentityUser>, IUserClaimStore<IdentityUser>
 {
     private readonly IConfiguration _configuration;
 
@@ -87,6 +88,7 @@ public class CustomUserStore : IUserStore<IdentityUser>, IUserPasswordStore<Iden
         {
             throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
         }
+
         return Task.FromResult(user.Id);
     }
 
@@ -97,6 +99,7 @@ public class CustomUserStore : IUserStore<IdentityUser>, IUserPasswordStore<Iden
         {
             throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
         }
+
         return Task.FromResult(user.UserName);
     }
 
@@ -120,13 +123,84 @@ public class CustomUserStore : IUserStore<IdentityUser>, IUserPasswordStore<Iden
         {
             throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
         }
+
         user.NormalizedUserName = normalizedName;
         return Task.CompletedTask;
     }
 
-    public Task<IdentityResult> UpdateAsync(IdentityUser user, CancellationToken cancellationToken)
+    public async Task<IdentityResult> UpdateAsync(IdentityUser user, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
+        }
+
+        user.ConcurrencyStamp = Guid.NewGuid().ToString();
+
+        var connString = _configuration.GetSection("ConnectionStrings").GetValue<string>("DefaultConnection");
+        await using var conn = new NpgsqlConnection(connString);
+        await conn.OpenAsync();
+
+        await using (var sqlConnection = conn)
+        {
+            var updateUserCommand =
+                $"UPDATE dbo.AspNetUsers " +
+                "SET UserName = @UserName, NormalizedUserName = @NormalizedUserName, Email = @Email, NormalizedEmail = @NormalizedEmail, EmailConfirmed = @EmailConfirmed, " +
+                "PasswordHash = @PasswordHash, SecurityStamp = @SecurityStamp, ConcurrencyStamp = @ConcurrencyStamp, PhoneNumber = @PhoneNumber, " +
+                "PhoneNumberConfirmed = @PhoneNumberConfirmed, TwoFactorEnabled = @TwoFactorEnabled, LockoutEnd = @LockoutEnd, LockoutEnabled = @LockoutEnabled, " +
+                "AccessFailedCount = @AccessFailedCount " +
+                "WHERE Id = @Id;";
+
+            await using var transaction = await sqlConnection.BeginTransactionAsync();
+            await sqlConnection.ExecuteAsync(updateUserCommand, new
+            {
+                user.UserName,
+                user.NormalizedUserName,
+                user.Email,
+                user.NormalizedEmail,
+                user.EmailConfirmed,
+                user.PasswordHash,
+                user.SecurityStamp,
+                user.ConcurrencyStamp,
+                user.PhoneNumber,
+                user.PhoneNumberConfirmed,
+                user.TwoFactorEnabled,
+                user.LockoutEnd,
+                user.LockoutEnabled,
+                user.AccessFailedCount,
+                user.Id
+            }, transaction);
+
+            try
+            {
+                await transaction.CommitAsync();
+            }
+            catch
+            {
+                try
+                {
+                    await transaction.RollbackAsync();
+                }
+                catch
+                {
+                    return IdentityResult.Failed(new IdentityError
+                    {
+                        Code = nameof(UpdateAsync),
+                        Description =
+                            $"User with email {user.Email} could not be updated. Operation could not be rolled back."
+                    });
+                }
+
+                return IdentityResult.Failed(new IdentityError
+                {
+                    Code = nameof(UpdateAsync),
+                    Description = $"User with email {user.Email} could not be updated. Operation was rolled back."
+                });
+            }
+        }
+
+        return IdentityResult.Success;
     }
 
     public Task<IdentityResult> DeleteAsync(IdentityUser user, CancellationToken cancellationToken)
@@ -156,10 +230,12 @@ public class CustomUserStore : IUserStore<IdentityUser>, IUserPasswordStore<Iden
         {
             throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
         }
+
         if (passwordHash == null)
         {
             throw new ArgumentNullException(nameof(passwordHash), $"Parameter {nameof(passwordHash)} cannot be null.");
         }
+
         user.PasswordHash = passwordHash;
         return Task.CompletedTask;
     }
@@ -171,6 +247,7 @@ public class CustomUserStore : IUserStore<IdentityUser>, IUserPasswordStore<Iden
         {
             throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
         }
+
         return Task.FromResult(user.PasswordHash);
     }
 
@@ -181,6 +258,82 @@ public class CustomUserStore : IUserStore<IdentityUser>, IUserPasswordStore<Iden
         {
             throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
         }
+
         return Task.FromResult(!string.IsNullOrEmpty(user.PasswordHash));
+    }
+
+    public async Task<IList<Claim>> GetClaimsAsync(IdentityUser user, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
+        }
+
+        var connString = _configuration.GetSection("ConnectionStrings").GetValue<string>("DefaultConnection");
+        await using var conn = new NpgsqlConnection(connString);
+        await conn.OpenAsync();
+
+        await using (var sqlConnection = conn)
+        {
+            var command = "SELECT * " +
+                          $"FROM dbo.AspNetUserClaims " +
+                          "WHERE UserId = @UserId;";
+
+            return (
+                    await sqlConnection.QueryAsync<IdentityUserClaim<string>>(command, new { UserId = user.Id })
+                )
+                .Select(e => new Claim(e.ClaimType, e.ClaimValue))
+                .ToList();
+        }
+    }
+
+    public async Task AddClaimsAsync(IdentityUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user), $"Parameter {nameof(user)} cannot be null.");
+        }
+
+        if (claims == null)
+        {
+            throw new ArgumentNullException(nameof(claims), $"Parameter {nameof(user)} cannot be null.");
+        }
+
+        var connString = _configuration.GetSection("ConnectionStrings").GetValue<string>("DefaultConnection");
+        await using var conn = new NpgsqlConnection(connString);
+        await conn.OpenAsync();
+
+        await using (var sqlConnection = conn)
+        {
+            foreach (var claim in claims)
+            {
+                var insertClaimsCommand = $"INSERT INTO dbo.AspNetUserClaims (UserId, ClaimType, ClaimValue) " +
+                                          "VALUES (@UserId, @ClaimType, @ClaimValue);";
+
+                await sqlConnection.ExecuteAsync(insertClaimsCommand, new
+                {
+                    UserId = user.Id,
+                    ClaimType = claim.Type,
+                    ClaimValue = claim.Value
+                });
+            }
+        }
+    }
+
+    public Task ReplaceClaimAsync(IdentityUser user, Claim claim, Claim newClaim, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task RemoveClaimsAsync(IdentityUser user, IEnumerable<Claim> claims, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task<IList<IdentityUser>> GetUsersForClaimAsync(Claim claim, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
     }
 }

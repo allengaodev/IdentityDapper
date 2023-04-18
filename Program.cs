@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using IdentityDapper;
 using Microsoft.AspNetCore.Identity;
 
@@ -9,6 +10,17 @@ builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddAuthorization(option =>
+{
+    option.AddPolicy("birthday", builder =>
+    {
+        builder
+            .RequireAuthenticatedUser()
+            .AddAuthenticationSchemes(IdentityConstants.ApplicationScheme)
+            .RequireClaim(ClaimTypes.DateOfBirth);
+    });
+});
 builder.Services
     .AddAuthentication()
     .AddCookie(IdentityConstants.ApplicationScheme,options =>

@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace IdentityDapper.Controllers;
 
-[Authorize]
+[Authorize(policy: "birthday")]
 [ApiController]
 [Route("[controller]")]
 public class WeatherForecastController : ControllerBase
