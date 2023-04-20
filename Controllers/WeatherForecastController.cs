@@ -1,11 +1,12 @@
+using IdentityDapper.Permissions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace IdentityDapper.Controllers;
 
-[Authorize(policy: "birthday")]
 [ApiController]
 [Route("[controller]")]
+[MinimumAgeAuthorize(18)]
 public class WeatherForecastController : ControllerBase
 {
     private static readonly string[] Summaries =

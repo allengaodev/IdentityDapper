@@ -1,5 +1,7 @@
 using System.Security.Claims;
 using IdentityDapper;
+using IdentityDapper.Permissions;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -11,6 +13,9 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddSingleton<IAuthorizationPolicyProvider, MinimumAgePolicyProvider>();
+builder.Services.AddSingleton<IAuthorizationHandler, MinimumAgeAuthorizationHandler>();
+
 builder.Services.AddAuthorization(option =>
 {
     option.AddPolicy("birthday", builder =>
@@ -21,6 +26,7 @@ builder.Services.AddAuthorization(option =>
             .RequireClaim(ClaimTypes.DateOfBirth);
     });
 });
+
 builder.Services
     .AddAuthentication()
     .AddCookie(IdentityConstants.ApplicationScheme,options =>
