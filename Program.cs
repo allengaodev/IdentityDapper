@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 
 var builder = WebApplication.CreateBuilder(args);
-
+var configuration = builder.Configuration;
 // Add services to the container.
 
 builder.Services.AddControllers();
@@ -28,10 +28,14 @@ builder.Services.AddAuthorization(option =>
 });
 
 builder.Services
-    .AddAuthentication()
-    .AddCookie(IdentityConstants.ApplicationScheme,options =>
+    .AddAuthentication(IdentityConstants.ApplicationScheme)
+    .AddCookie(IdentityConstants.ApplicationScheme, options =>
     {
         options.ExpireTimeSpan = TimeSpan.FromSeconds(10);
+    }).AddGoogle(IdentityConstants.ExternalScheme, o =>
+    {
+        o.ClientId = configuration["Authentication:Google:ClientId"];
+        o.ClientSecret = configuration["Authentication:Google:ClientSecret"];
     });
 // builder.Services.TryAddScoped<UserManager<IdentityUser>>();
 builder.Services.AddIdentityCore<IdentityUser>()
