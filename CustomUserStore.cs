@@ -5,7 +5,11 @@ using Npgsql;
 
 namespace IdentityDapper;
 
-public class CustomUserStore : IUserStore<IdentityUser>, IUserPasswordStore<IdentityUser>, IUserClaimStore<IdentityUser>
+public class CustomUserStore
+    : IUserStore<IdentityUser>,
+        IUserPasswordStore<IdentityUser>,
+        IUserClaimStore<IdentityUser>,
+        IUserLoginStore<IdentityUser>
 {
     private readonly IConfiguration _configuration;
 
@@ -333,6 +337,95 @@ public class CustomUserStore : IUserStore<IdentityUser>, IUserPasswordStore<Iden
     }
 
     public Task<IList<IdentityUser>> GetUsersForClaimAsync(Claim claim, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task AddLoginAsync(IdentityUser user, UserLoginInfo login, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user),
+                $"Parameter {nameof(user)} cannot be null.");
+        }
+
+        if (login == null)
+        {
+            throw new ArgumentNullException(nameof(login),
+                $"Parameter {nameof(login)} cannot be null.");
+        }
+
+        var connString = _configuration.GetSection("ConnectionStrings").GetValue<string>("DefaultConnection");
+        await using var conn = new NpgsqlConnection(connString);
+        await conn.OpenAsync();
+        await using (var sqlConnection = conn)
+        {
+            var insertLoginsCommand =
+                $"INSERT INTO dbo.AspNetUserLogins (LoginProvider, ProviderKey, ProviderDisplayName, UserId) " +
+                "VALUES (@LoginProvider, @ProviderKey, @ProviderDisplayName, @UserId);";
+
+            await sqlConnection.ExecuteAsync(insertLoginsCommand, new
+            {
+                login.LoginProvider,
+                login.ProviderKey,
+                login.ProviderDisplayName,
+                UserId = user.Id
+            });
+        }
+    }
+
+    public async Task<IdentityUser?> FindByLoginAsync(
+        string loginProvider,
+        string providerKey,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (loginProvider == null)
+        {
+            throw new ArgumentNullException(nameof(loginProvider),
+                $"Parameter {nameof(loginProvider)} cannot be null.");
+        }
+
+        var connString = _configuration.GetSection("ConnectionStrings").GetValue<string>("DefaultConnection");
+        await using var conn = new NpgsqlConnection(connString);
+        await conn.OpenAsync();
+
+        await using (var sqlConnection = conn)
+        {
+            var command = "SELECT UserId " +
+                          "FROM dbo.AspNetUserLogins " +
+                          "WHERE LoginProvider = @LoginProvider AND ProviderKey = @ProviderKey;";
+
+            var userId = await sqlConnection.QuerySingleOrDefaultAsync<string>(command, new
+            {
+                LoginProvider = loginProvider,
+                ProviderKey = providerKey
+            });
+
+            if (userId == null)
+            {
+                return null;
+            }
+
+            command = "SELECT * " +
+                      "FROM dbo.AspNetUsers " +
+                      "WHERE Id = @Id;";
+
+            return await sqlConnection.QuerySingleAsync<IdentityUser>(command, new { Id = userId });
+        }
+    }
+    
+    public Task RemoveLoginAsync(
+        IdentityUser user,
+        string loginProvider,
+        string providerKey,
+        CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task<IList<UserLoginInfo>> GetLoginsAsync(IdentityUser user, CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }

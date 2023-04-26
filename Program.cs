@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using IdentityDapper;
 using IdentityDapper.Permissions;
+using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 
@@ -22,22 +23,35 @@ builder.Services.AddAuthorization(option =>
     {
         builder
             .RequireAuthenticatedUser()
-            .AddAuthenticationSchemes(IdentityConstants.ApplicationScheme)
             .RequireClaim(ClaimTypes.DateOfBirth);
     });
 });
 
 builder.Services
-    .AddAuthentication(IdentityConstants.ApplicationScheme)
+    .AddAuthentication(o =>
+    {
+        o.DefaultScheme = IdentityConstants.ApplicationScheme;
+    })
     .AddCookie(IdentityConstants.ApplicationScheme, options =>
     {
-        options.ExpireTimeSpan = TimeSpan.FromSeconds(10);
-    }).AddGoogle(IdentityConstants.ExternalScheme, o =>
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
+    })
+    .AddCookie(IdentityConstants.TwoFactorUserIdScheme, options =>
+    {
+        options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
+    })
+    .AddCookie(IdentityConstants.ExternalScheme, o =>
+    {
+        o.ExpireTimeSpan = TimeSpan.FromMinutes(10);
+    })
+    .AddGoogle(GoogleDefaults.AuthenticationScheme, o =>
     {
         o.ClientId = configuration["Authentication:Google:ClientId"];
         o.ClientSecret = configuration["Authentication:Google:ClientSecret"];
+        o.SignInScheme = IdentityConstants.ExternalScheme;
     });
-// builder.Services.TryAddScoped<UserManager<IdentityUser>>();
+
+// builder.Services.AddIdentity<IdentityUser, IdentityRole>();
 builder.Services.AddIdentityCore<IdentityUser>()
     .AddUserStore<CustomUserStore>()
     .AddSignInManager<SignInManager<IdentityUser>>();
