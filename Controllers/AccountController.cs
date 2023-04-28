@@ -36,8 +36,8 @@ public class AccountController : ControllerBase
     [HttpGet(Name = "GetUser")]
     public async Task<IdentityUser> GetUser(string userName)
     {
-        new Claim(ClaimTypes.DateOfBirth, "1995-01-01", ClaimValueTypes.Date);
-        return await _userManager.FindByNameAsync(userName);
+        var user = await _userManager.FindByNameAsync(userName);
+        return user;
     }
 
     [HttpGet(template: "~/addClaim", Name = "AddClaim")]
@@ -76,6 +76,51 @@ public class AccountController : ControllerBase
             false,
             false);
     }
+    
+    [HttpGet(template: "~/userAuthenticatorKey", Name = "GetUserAuthenticatorKey")]
+    public async Task<string?> GetUserAuthenticatorKey(string userName)
+    {
+        var user = await _userManager.FindByNameAsync(userName);
+
+        await _userManager.SetTwoFactorEnabledAsync(user, true);
+        
+        var key = await _userManager.GetAuthenticatorKeyAsync(user);
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            // await _userManager.SetAuthenticationTokenAsync(
+            //     user,
+            //     "[AspNetUserStore]",
+            //     "AuthenticatorKey",
+            //     "XYBNE4FPX4OM5PPYV6CRZ7ZZNYBI3GPK");
+            
+            await _userManager.ResetAuthenticatorKeyAsync(user);
+            
+            // key = await _userManager.GetAuthenticationTokenAsync(
+            //     user, 
+            //     "[AspNetUserStore]", 
+            //     "AuthenticatorKey");
+
+            key = await _userManager.GetAuthenticatorKeyAsync(user);
+        }
+
+        return key;
+    }
+
+    [HttpPost(template: "~/twoFactorSignIn", Name = "TwoFactorSignIn")]
+    public async Task<SignInResult> TwoFactorSignIn(string code)
+    {
+        return await _signInManager.TwoFactorAuthenticatorSignInAsync(
+            code,
+            false,
+            false);
+    }
+
+    [HttpPost(template: "~/updateUser", Name = "UpdateUser")]
+    public async Task<IdentityResult> UpdateUser(string userName)
+    {
+        var identityUser = await _userManager.FindByNameAsync(userName);
+        return await _userManager.SetTwoFactorEnabledAsync(identityUser, true);
+    }
 
     [HttpGet(template: "~/externalSignin", Name = "ExternalSignin")]
     public async Task ExternalSignin()
@@ -97,12 +142,12 @@ public class AccountController : ControllerBase
             info.LoginProvider,
             info.ProviderKey,
             isPersistent: true,
-            bypassTwoFactor: true
+            bypassTwoFactor: false
         );
 
         if (result.Succeeded)
             return Redirect("/swagger");
-        
+
         var user = await _userManager.FindByNameAsync(userEmail);
         if (user == null)
         {
@@ -121,7 +166,7 @@ public class AccountController : ControllerBase
                 info.ProviderDisplayName
             ));
         }
-        
+
         await _signInManager.SignOutAsync();
         await _signInManager.SignInAsync(user, isPersistent: true);
 

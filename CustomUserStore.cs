@@ -9,8 +9,15 @@ public class CustomUserStore
     : IUserStore<IdentityUser>,
         IUserPasswordStore<IdentityUser>,
         IUserClaimStore<IdentityUser>,
-        IUserLoginStore<IdentityUser>
+        IUserLoginStore<IdentityUser>,
+        IUserTwoFactorStore<IdentityUser>,
+        IUserAuthenticatorKeyStore<IdentityUser>,
+        IUserAuthenticationTokenStore<IdentityUser>
 {
+    private const string InternalLoginProvider = "[AspNetUserStore]";
+    private const string AuthenticatorKeyTokenName = "AuthenticatorKey";
+    private const string RecoveryCodeTokenName = "RecoveryCodes";
+    
     private readonly IConfiguration _configuration;
 
     public CustomUserStore(IConfiguration configuration)
@@ -212,9 +219,23 @@ public class CustomUserStore
         throw new NotImplementedException();
     }
 
-    public Task<IdentityUser?> FindByIdAsync(string userId, CancellationToken cancellationToken)
+    public async Task<IdentityUser?> FindByIdAsync(string userId, CancellationToken cancellationToken)
     {
-        throw new NotImplementedException();
+        var connString = _configuration.GetSection("ConnectionStrings").GetValue<string>("DefaultConnection");
+        await using var conn = new NpgsqlConnection(connString);
+        await conn.OpenAsync();
+
+        await using (var sqlConnection = conn)
+        {
+            var command = "SELECT * " +
+                          $"FROM dbo.AspNetUsers " +
+                          "WHERE Id = @Id;";
+
+            return await sqlConnection.QuerySingleOrDefaultAsync<IdentityUser>(command, new
+            {
+                Id = userId
+            });
+        }
     }
 
     public Task SetSecurityStampAsync(IdentityUser user, string stamp, CancellationToken cancellationToken)
@@ -415,7 +436,7 @@ public class CustomUserStore
             return await sqlConnection.QuerySingleAsync<IdentityUser>(command, new { Id = userId });
         }
     }
-    
+
     public Task RemoveLoginAsync(
         IdentityUser user,
         string loginProvider,
@@ -426,6 +447,117 @@ public class CustomUserStore
     }
 
     public Task<IList<UserLoginInfo>> GetLoginsAsync(IdentityUser user, CancellationToken cancellationToken)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task SetTwoFactorEnabledAsync(IdentityUser user, bool enabled, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user),
+                $"Parameter {nameof(user)} cannot be null.");
+        }
+
+        user.TwoFactorEnabled = enabled;
+        return Task.CompletedTask;
+    }
+
+    public Task<bool> GetTwoFactorEnabledAsync(IdentityUser user, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user),
+                $"Parameter {nameof(user)} cannot be null.");
+        }
+
+        return Task.FromResult(user.TwoFactorEnabled);
+    }
+
+    public Task SetAuthenticatorKeyAsync(IdentityUser user, string key, CancellationToken cancellationToken)
+        => SetTokenAsync(user, InternalLoginProvider, AuthenticatorKeyTokenName, key, cancellationToken);
+
+    public Task<string?> GetAuthenticatorKeyAsync(IdentityUser user, CancellationToken cancellationToken)
+        => GetTokenAsync(user, InternalLoginProvider, AuthenticatorKeyTokenName, cancellationToken);
+
+    public async Task SetTokenAsync(
+        IdentityUser user,
+        string loginProvider,
+        string name,
+        string? value,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user),
+                $"Parameter {nameof(user)} cannot be null.");
+        }
+
+        var connString = _configuration.GetSection("ConnectionStrings").GetValue<string>("DefaultConnection");
+        await using var conn = new NpgsqlConnection(connString);
+        await conn.OpenAsync();
+        await using (var sqlConnection = conn)
+        {
+            var insertLoginsCommand =
+                $"INSERT INTO dbo.AspNetUserTokens (UserId, LoginProvider, Name, Value) " +
+                "VALUES (@UserId, @LoginProvider, @Name, @Value);";
+
+            await sqlConnection.ExecuteAsync(insertLoginsCommand, new
+            {
+                UserId = user.Id,
+                LoginProvider = loginProvider,
+                Name = name,
+                Value = value
+            });
+        }
+    }
+
+    public async Task<string?> GetTokenAsync(
+        IdentityUser user,
+        string loginProvider,
+        string name,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (user == null)
+        {
+            throw new ArgumentNullException(nameof(user),
+                $"Parameter {nameof(user)} cannot be null.");
+        }
+
+        var connString = _configuration.GetSection("ConnectionStrings").GetValue<string>("DefaultConnection");
+        await using var conn = new NpgsqlConnection(connString);
+        await conn.OpenAsync();
+
+        await using (var sqlConnection = conn)
+        {
+            var command = "SELECT * " +
+                          $"FROM dbo.AspNetUserTokens " +
+                          "WHERE UserId = @UserId AND LoginProvider = @LoginProvider;";
+
+            return (
+                    await sqlConnection.QueryAsync<IdentityUserToken<string>>(command,
+                        new
+                        {
+                            UserId = user.Id,
+                            LoginProvider = loginProvider
+                        })
+                )
+                .Select(e => e.Value)
+                .FirstOrDefault();
+        }
+    }
+
+    public Task RemoveTokenAsync(
+        IdentityUser user,
+        string loginProvider,
+        string name,
+        CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
     }

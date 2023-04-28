@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using IdentityDapper;
 using IdentityDapper.Permissions;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -36,6 +37,13 @@ builder.Services
     {
         options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
     })
+    .AddCookie(IdentityConstants.TwoFactorRememberMeScheme, o =>
+    {
+        o.Events = new CookieAuthenticationEvents
+        {
+            OnValidatePrincipal = SecurityStampValidator.ValidateAsync<ITwoFactorSecurityStampValidator>
+        };
+    })
     .AddCookie(IdentityConstants.TwoFactorUserIdScheme, options =>
     {
         options.ExpireTimeSpan = TimeSpan.FromMinutes(10);
@@ -54,7 +62,8 @@ builder.Services
 // builder.Services.AddIdentity<IdentityUser, IdentityRole>();
 builder.Services.AddIdentityCore<IdentityUser>()
     .AddUserStore<CustomUserStore>()
-    .AddSignInManager<SignInManager<IdentityUser>>();
+    .AddSignInManager<SignInManager<IdentityUser>>()
+    .AddTokenProvider<AuthenticatorTokenProvider<IdentityUser>>(TokenOptions.DefaultAuthenticatorProvider);
 
 var app = builder.Build();
 
