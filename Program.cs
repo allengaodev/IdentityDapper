@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 
 var builder = WebApplication.CreateBuilder(args);
 var configuration = builder.Configuration;
@@ -52,12 +53,26 @@ builder.Services
     {
         o.ExpireTimeSpan = TimeSpan.FromMinutes(10);
     })
-    .AddGoogle(GoogleDefaults.AuthenticationScheme, o =>
+    .AddOpenIdConnect("Google", o =>
     {
+        o.Authority = "https://accounts.google.com";
         o.ClientId = configuration["Authentication:Google:ClientId"];
         o.ClientSecret = configuration["Authentication:Google:ClientSecret"];
+        o.ResponseType = OpenIdConnectResponseType.Code;
+        o.GetClaimsFromUserInfoEndpoint = true;
+        o.Scope.Add("openid");
+        o.Scope.Add("email");
+
+        o.CallbackPath = "/signin-google";
+        o.SaveTokens = true;
         o.SignInScheme = IdentityConstants.ExternalScheme;
     });
+    // .AddGoogle(GoogleDefaults.AuthenticationScheme, o =>
+    // {
+    //     o.ClientId = configuration["Authentication:Google:ClientId"];
+    //     o.ClientSecret = configuration["Authentication:Google:ClientSecret"];
+    //     o.SignInScheme = IdentityConstants.ExternalScheme;
+    // });
 
 // builder.Services.AddIdentity<IdentityUser, IdentityRole>();
 builder.Services.AddIdentityCore<IdentityUser>()

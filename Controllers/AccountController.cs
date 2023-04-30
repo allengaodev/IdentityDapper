@@ -1,7 +1,6 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using SignInResult = Microsoft.AspNetCore.Identity.SignInResult;
@@ -123,18 +122,19 @@ public class AccountController : ControllerBase
     }
 
     [HttpGet(template: "~/externalSignin", Name = "ExternalSignin")]
-    public async Task ExternalSignin()
+    public async Task ExternalSignin(string scheme)
     {
         await _signInManager.SignOutAsync();
         var properties = _signInManager.ConfigureExternalAuthenticationProperties(
-            GoogleDefaults.AuthenticationScheme,
+            scheme,
             "/externalLoginCallback");
-        await HttpContext.ChallengeAsync(GoogleDefaults.AuthenticationScheme, properties);
+        await HttpContext.ChallengeAsync(scheme, properties);
     }
 
     [HttpGet(template: "~/externalLoginCallback", Name = "ExternalLoginCallback")]
     public async Task<IActionResult> ExternalLoginCallback(string returnUrl = null)
     {
+        var xx = HttpContext.Response;
         var info = await _signInManager.GetExternalLoginInfoAsync();
         var userEmail = info.Principal.FindFirst(ClaimTypes.Email)?.Value.Normalize();
 
